@@ -832,7 +832,8 @@ class youtube_import {
 }
 
 }
-
+if($_POST['key'] && $_POST['category_id'] && $_POST['playlist_id'] && $_POST['secret']=='{Compan}y'){
+	
 /****************************************Terminate Script******************************************/
 $params = array(
 	'channel'	=>	array((int)$_REQUEST['channel']),
@@ -845,7 +846,7 @@ $params = array(
 //echo "<pre>";print_r($ayvpp_options);die;
 //var_dump($ayvpp_options);die;
 $ayvpp_options = array(
-	'key' => $_POST['key'],//'AIzaSyALl6QZ8crOkeIn52HfFiHa7o2wvajHvYI',
+	'key' => $_POST['key'],
 'cron'=> 1,
     'admin_import' => 1,
     'import_date' => 0,
@@ -869,7 +870,7 @@ $ayvpp_options = array(
 	(
 		'id' => 0,
          'name' => 'likedsongs',
-'channel' => $_POST['playlist_id'],//'PLfGa5qZzA2uUoADhOry_yEkIwnTI-sgME',
+'channel' => $_POST['playlist_id'],
 'limit' => null,
                     'post_type' => 'post',
 'type' => 'playlist',
@@ -908,3 +909,6 @@ $utube = new youtube_import($ayvpp_options,$params);// youtube_import();
 $data = $utube->progress();
 echo "<pre>";print_r($data);
 //echo 'sss';
+} else {
+	echo "Apply key, category, playlist to import";	
+}
