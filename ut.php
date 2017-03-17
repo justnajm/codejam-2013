@@ -1,8 +1,351 @@
 <?php
 
+
 require("wp-config.php");
-require("file.php");
-require("wp-content/plugins/automatic-youtube-video-posts/class/wordpress.php");
+//require("file.php");
+//require("wp-content/plugins/automatic-youtube-video-posts/class/wordpress.php");
+
+global $getWP;
+if(!class_exists('ternWP')) {
+//
+	class ternWP {
+
+		var $errors = array();
+		var $alerts = array();
+		var $warnings = array();
+
+//                                *******************************                                 //
+//________________________________** OPTIONS                   **_________________________________//
+//////////////////////////////////**                           **///////////////////////////////////
+//                                **                           **                                 //
+//                                *******************************                                 //
+		function getOption($n,$d='',$v=false) {
+			$o = get_option($n);
+			if(!$o and !empty($d)) {
+				add_option($n,$d);
+			}
+			elseif($o and (empty($o) or $v) and !empty($d)) {
+				update_option($n,$d);
+			}
+			elseif($o and !empty($d)) {
+				foreach($d as $k => $v) {
+					if(!isset($o[$k])) {
+						$o[$k] = $v;
+					}
+				}
+				update_option($n,$o);
+			}
+			return get_option($n);
+		}
+		function updateOption($n,$d,$w) {
+			$o = $this->getOption($n,$d);
+			if(wp_verify_nonce($_REQUEST['_wpnonce'],$w) and $_REQUEST['action'] == 'update' and current_user_can('administrator')) {
+				$f = new parseForm('post','_wp_http_referer,_wpnonce,action,submit,page,page_id');
+				foreach($o as $k => $v) {
+					if(is_string($v) and isset($f->a[$k])) {
+						$f->a[$k] = preg_match("/^[0-9]+$/",$f->a[$k]) ? (int)$f->a[$k] : $f->a[$k];
+					}
+					if(!isset($f->a[$k])) {
+						$f->a[$k] = $v;
+					}
+				}
+				return $this->getOption($n,$f->a,true);
+				$this->addAlert('You have successfully updated your settings.');
+			}
+			else {
+				return $this->getOption($n,$d);
+			}
+		}
+//                                *******************************                                 //
+//________________________________** POSTS                     **_________________________________//
+//////////////////////////////////**                           **///////////////////////////////////
+//                                **                           **                                 //
+//                                *******************************                                 //
+		function postByName($n) {
+			global $wpdb;
+			return $wpdb->get_var("select ID from $wpdb->posts where post_name='$n'");
+		}
+		function the_content($c,$m=false,$s=0) {
+			global $more;
+			//
+			if(!$m) {
+				$m = __('(more...)');
+			}
+			$o = '';
+			$h = false;
+			//
+			if(preg_match('/<!--more(.*?)?-->/',$c,$r)) {
+				$c = explode($r[0],$c,2);
+				if(!empty($r[1]) && !empty($m)) {
+					$m = strip_tags(wp_kses_no_null(trim($r[1])));
+				}
+				$h = true;
+			}
+			else {
+				$c = array($c);
+			}
+			//
+			if(($more) && ($s) && ($h)) {
+				$teaser = '';
+			}
+			else {
+				$o .= $c[0];
+			}
+			$o .= $teaser;
+			if(count($c) > 1) {
+				if($more) {
+					$o .= '<span id="more-' . $id . '"></span>' . $c[1];
+				}
+				else {
+					if(!empty($m)) {
+						$o .= apply_filters('the_content_more_link',' <a href="'.get_permalink()."#more-$id\" class=\"more-link\">$m</a>",$m);
+					}
+					$o = force_balance_tags($o);
+				}
+
+			}
+			if($preview) {
+				$o = preg_replace_callback('/\%u([0-9A-F]{4})/',create_function('$r','return "&#" . base_convert($r[1], 16, 10) . ";";'),$o);
+			}
+			return $o;
+		}
+//                                *******************************                                 //
+//________________________________** ERRORS                    **_________________________________//
+//////////////////////////////////**                           **///////////////////////////////////
+//                                **                           **                                 //
+//                                *******************************                                 //
+		function addError($e) {
+			$this->errors[] = $e;
+		}
+		function renderErrors() {
+			if(empty($this->errors)) {
+				return false;
+			}
+			$notice = '';
+			foreach($this->errors as $v) {
+				$notice .= '<p>'.$v.'</p>';
+			}
+			$this->errors = array();
+			return $notice;
+		}
+		function addWarning($e) {
+			$this->warnings[] = $e;
+		}
+		function renderWarnings() {
+			if(empty($this->warnings)) {
+				return false;
+			}
+			$notice = '';
+			foreach($this->warnings as $v) {
+				$notice .= '<p>'.$v.'</p>';
+			}
+			$this->warnings = array();
+			return $notice;
+		}
+		function addAlert($e) {
+			$this->alerts[] = $e;
+		}
+		function renderAlerts() {
+			if(empty($this->alerts)) {
+				return false;
+			}
+			$notice = '';
+			foreach($this->alerts as $v) {
+				$notice .= '<p>'.$v.'</p>';
+			}
+			$this->alerts = array();
+			return $notice;
+		}
+
+	}
+	$getWP = new ternWP;
+//
+}
+
+if(!class_exists('fileClass')) {
+//
+	class fileClass {
+
+		var $magic = '/usr/share/file/magic';
+
+		var $ma = array('image/gif'=>'image','image/jpeg'=>'image','image/png'=>'image',
+			'text/plain'=>'file','text/rtf'=>'file','application/msword'=>'file','application/pdf'=>'file',
+			'application/x-shockwave-flash'=>'flash');
+
+		function fileClass() {
+			global $ftp_host,$ftp_host_directory,$ftp_username,$ftp_password;
+			$this->h = $ftp_host;
+			$this->d = $ftp_host_directory;
+			$this->u = $ftp_username;
+			$this->p = $ftp_password;
+		}
+		function contents($d) {
+			return file_get_contents($d);
+		}
+		function mimeType($d) {
+			if(function_exists('finfo_open')) {
+				$f = finfo_open(FILEINFO_MIME,$this->magic);
+				return finfo_file($f,$d);
+			}
+			else {
+				return mime_content_type($d);
+			}
+		}
+		function cleanType($m) {
+			$p = strpos($m,';');
+			if($p !== false) {
+				return substr($m,0,$p);
+			}
+			return $m;
+		}
+		function isMime($d,$a=false,$r=true) {
+			$t = $this->cleanType($this->mimetype($d));
+			$a = empty($a) ? $this->ma : $a;
+			foreach($a as $k => $v) {
+				if($k == $t) {
+					if($r === true) {
+						return true;
+					}
+					elseif($r == 'type') {
+						return $v;
+					}
+					elseif($r == 'mime') {
+						return $t;
+					}
+				}
+			}
+			return false;
+		}
+		function isWritableDirectory($d) {
+			if(!is_dir($d)) {
+				if(!@mkdir($d,2755)) {
+					return false;
+				}
+			}
+			if(!is_writable($d)) {
+				if(!@chmod($d,2755)) {
+					return false;
+				}
+			}
+			return true;
+		}
+		function directoryList($b) {
+
+			$b = array_merge(array(
+				'dir'	=>	'/',
+				'rec'	=>	false,
+				'flat'	=>	true,
+				'depth'	=>	'*',
+				'ext'	=>	false
+			),$b);
+			$b['dir'] = substr($b['dir'],-1) != '/' ? $b['dir'].'/' : $b['dir'];
+
+			if(@is_dir($b['dir'])) {
+				$a = array();
+				if($p = @opendir($b['dir'])) {
+					while(($f = @readdir($p)) !== false) {
+						$n = $b['dir'].$f;
+						if(is_file($n) && !$this->is_hidden_file($f) && (!$b['ext'] || $this->is_ext($n,$b['ext']))) {
+							$a[] = $n;
+						}
+						elseif(is_dir($n) and $f != '.' and $f != '..' and $b['rec'] and ($b['depth'] == '*' or $b['depth'] != 1)) {
+							$x = array_merge($b,array('dir'=>$n.'/','depth'=>$b['depth'] !== '*' ? ($b['depth']-1) : $b['depth']));
+							if($b['flat']) {
+								$a = array_merge($a,fileClass::directoryList($x));
+							}
+							else {
+								$a[$n] = fileClass::directoryList($x);
+							}
+						}
+					}
+					closedir($p);
+					return $a;
+				}
+			}
+			return false;
+		}
+		function is_ext($n,$e) {
+			$s = substr($n,strrpos($n,'.')+1);
+			if(in_array($s,$e)) {
+				return true;
+			}
+			return false;
+		}
+		function is_hidden_file($f) {
+			if(substr($f,0,1) == '.') {
+				return true;
+			}
+			return false;
+		}
+		function createFile($n,$c,$d) {
+			if(!is_dir($d)) {
+				if(!@mkdir($d,2755)) {
+					return 'directory does not exist';
+				}
+			}
+			if(!is_writable($d)) {
+				if(!@chmod($d,2755)) {
+					return 'directory is not writable';
+				}
+			}
+			$h = @fopen($d . '/' . $n,'w');
+			if(!$h) {
+				return 'unable to create file';
+			}
+			if(@fwrite($h,$c)) {
+				fclose($h);
+				return true;
+			}
+			return false;
+		}
+		function deleteFile($d) {
+			if(!@unlink($d)) {
+				return 'unable to delete file';
+			}
+			return true;
+		}
+		function uploadFile($f,$n,$d) {
+			$a = $this->cleanDir($d.'/'.$n);
+			if(@is_uploaded_file($f)) {
+				if(move_uploaded_file($f,$a)) {
+					return true;
+				}
+				else {
+					$c = @ftp_connect($this->h);
+					$l = @ftp_login($c,$this->u,$this->p);
+					@ftp_chdir($c,$d);
+					if(@ftp_put($c,$a,$f,FTP_BINARY)) {
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+		function renameFile($d,$f,$n) {
+			$f = $this->cleanDir($d.'/'.$f);
+			$n = $this->cleanDir($d.'/'.$n);
+			if(is_file($f)) {
+				if(rename($f,$n)) {
+					return true;
+				}
+				else {
+					$c = @ftp_connect($this->h);
+					$l = @ftp_login($c,$this->u,$this->p);
+					@ftp_chdir($c,$d);
+					if(@ftp_rename($c,$f,$n)) {
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+		function cleanDir($d) {
+			return str_replace('//','/',$d);
+		}
+
+	}
+//
+}
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 //		File:
